@@ -1,0 +1,25 @@
+name: Car Blog Auto Post
+on:
+  schedule:
+    # KST 09:40 / 18:40 (UTC 00:40 / 09:40) — 예약발행 10시/19시보다 앞서 실행
+    - cron: '40 0 * * *'
+    - cron: '40 9 * * *'
+  workflow_dispatch:      # 수동 실행 버튼
+permissions:
+  contents: write
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+      - name: 파이썬 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 자동 포스팅 실행
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          TOKEN_PICKLE_BASE64: ${{ secrets.TOKEN_PICKLE_BASE64 }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python auto-post.py
