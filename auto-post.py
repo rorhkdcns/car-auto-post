@@ -10,37 +10,42 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import urllib.request
 import warnings
 
 # [추가] 보기 싫은 구글 API 파이썬 버전 경고문 강제 차단
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # [1단계] 라이브러리 자동 설치 및 검증
-required_modules = [
-    "google-auth-oauthlib", 
-    "google-auth-httplib2", 
-    "google-api-python-client", 
-    "google-genai"  
-]
+required_modules = {
+    "google-auth-oauthlib": "google_auth_oauthlib",
+    "google-auth-httplib2": "google_auth_httplib2",
+    "google-api-python-client": "googleapiclient",
+    "google-genai": "google.genai",
+    "Pillow": "PIL",
+    "requests": "requests",
+}
 
 print("🔄 깃허브 액션 서버 환경 내 라이브러리 자동 설치 시작...")
-for module in required_modules:
+for pip_name, import_name in required_modules.items():
     try:
-        if module == "google-genai":
+        if pip_name == "google-genai":
             import google.genai
         else:
-            __import__(module.replace('-', '_'))
+            __import__(import_name)
     except ImportError:
-        print(f"📦 {module} 설치 중...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", module])
+        print(f"📦 {pip_name} 설치 중...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pip_name])
         time.sleep(1)
 
 print("✅ 모든 라이브러리 설치 및 인식 완료! 본 코드를 시작합니다.")
 print("-" * 60)
 
+from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
 from google import genai 
-from google.genai import types  
+from google.genai import types
+import requests
 
 # =====================================================================
 # ⚙️ 고유 설정 정보 【★ 아래 3개는 형이 직접 채워야 함 ★】
@@ -50,6 +55,9 @@ CAR_TEST_URL = "https://car.gwangchoon.com/2026/07/car-test.html"
 GOOGLE_ADSENSE_SLOT = "5317754949"
 
 GOOGLE_ADSENSE_CLIENT = "ca-pub-4292478378917157"
+
+GITHUB_USER_ID = "rorhkdcns"
+GITHUB_REPO_NAME = "car-auto-post"
 
 CAR_KEYWORDS = [
     # ── 구매/계약 ──
@@ -126,6 +134,77 @@ CTA_CODE = f"""
     <a href="#car-test-top" style="display: inline-block; background: #334155; color: white; font-weight: bold; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 16px; transition: background 0.2s;">🚗 자동차 추천 테스트로 이동하기</a>
 </div>
 """
+
+# =====================================================================
+# 🎨 썸네일 생성 모듈
+# =====================================================================
+def create_and_upload_thumbnail(title_text):
+    gh_token = os.environ.get("GITHUB_TOKEN")
+    if not gh_token:
+        print("⚠️ GITHUB_TOKEN이 감지되지 않아 썸네일 원격 전송을 생략합니다.")
+        return ""
+
+    font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"
+    font_path = "NanumGothic-Bold.ttf"
+    if not os.path.exists(font_path):
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+        except:
+            pass
+
+    img = Image.new('RGB', (800, 800), color='#16337F')
+    draw = ImageDraw.Draw(img)
+
+    try:
+        title_font = ImageFont.truetype(font_path, 80)
+    except:
+        title_font = ImageFont.load_default()
+
+    words = title_text.split(' ')
+    lines, curr = [], []
+    for w in words:
+        curr.append(w)
+        if len(' '.join(curr)) > 8:
+            lines.append(' '.join(curr[:-1]))
+            curr = [w]
+    lines.append(' '.join(curr))
+    if len(lines) > 3:
+        lines = [lines[0], lines[1], lines[2] + "..."]
+    formatted_title = '\n'.join(lines)
+
+    draw.multiline_text((400, 400), formatted_title, fill="#f8fafc", font=title_font, spacing=34, anchor="mm", align="center")
+
+    file_name = f"thumb_{int(time.time())}.webp"
+    img.save(file_name, "WEBP", quality=82)
+
+    with open(file_name, "rb") as f:
+        encoded_content = base64.b64encode(f.read()).decode("utf-8")
+
+    git_path = f"blog_images/car/{file_name}"
+    url = f"https://api.github.com/repos/{GITHUB_USER_ID}/{GITHUB_REPO_NAME}/contents/{git_path}"
+    headers = {"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github.v3+json"}
+
+    sha = ""
+    try:
+        res_get = requests.get(url, headers=headers, timeout=5)
+        if res_get.status_code == 200:
+            sha = res_get.json().get("sha", "")
+    except:
+        pass
+
+    payload = {"message": f"Auto-thumbnail: {file_name}", "content": encoded_content, "branch": "main"}
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        res_put = requests.put(url, headers=headers, json=payload, timeout=10)
+        if res_put.status_code in [200, 201]:
+            print(f"🎨 썸네일 깃허브 업로드 성공! ({file_name})")
+            return f"https://cdn.jsdelivr.net/gh/{GITHUB_USER_ID}/{GITHUB_REPO_NAME}@main/{git_path}"
+    except Exception as e:
+        print(f"❌ [썸네일 업로드 실패] 사유: {e}")
+
+    return ""
 
 # =====================================================================
 # 🛠️ 보조 함수들
@@ -370,6 +449,9 @@ def main():
     if len(body1) < 15 or len(body2) < 15:
         raise ValueError(f"🚨 본문 실종 에러! 껍데기 파싱은 성공했으나 본문 내용이 비어있습니다.\n[body1]: {body1}\n[body2]: {body2}")
 
+    thumbnail_cdn_url = create_and_upload_thumbnail(title)
+    thumb_html = f'<div style="text-align:center; margin:20px 0;"><img src="{thumbnail_cdn_url}" alt="{title}" style="max-width:100%; border-radius:12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);"/></div>' if thumbnail_cdn_url else ""
+
     gs_html = format_paragraphs(global_summary) if global_summary else ""
     overview_summary_html = f'<div style="background:#eff6ff; border-left:4px solid #2563eb; padding:18px; margin:20px 0; border-radius:0 8px 8px 0;"><p style="margin:0 0 8px 0; font-size:15px; font-weight:bold; color:#1e40af;">💡 핵심 요약</p><div style="font-size:16px; color:#334155;">{gs_html}</div></div>' if gs_html else ""
 
@@ -378,7 +460,7 @@ def main():
     faq_html = build_faq_html(faq_list)
     conclusion_html = build_conclusion_html(conclusion)
 
-    final_html = toc_html + intro_html + overview_summary_html + ADSENSE_CODE + \
+    final_html = thumb_html + toc_html + intro_html + overview_summary_html + ADSENSE_CODE + \
                  f'<h3 id="sec1" style="border-left:5px solid #3b82f6; padding-left:10px; margin-top:35px; font-size:20px;">{sub1}</h3>{format_paragraphs(body1)}{make_section_summary(summary_1)}' + \
                  CAR_TEST_BOARD_CODE + \
                  f'<h3 id="sec2" style="border-left:5px solid #3b82f6; padding-left:10px; margin-top:35px; font-size:20px;">{sub2}</h3>{format_paragraphs(body2)}{make_section_summary(summary_2)}' + ADSENSE_CODE + \
