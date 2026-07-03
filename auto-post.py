@@ -387,13 +387,13 @@ def main():
 
     scheduled_pub_time = calculate_scheduled_time()
 
-    # [3연타 분할 전송] 라이브 등록 -> 한글 제목 먼저 박제 -> 마지막에 미래 시간 유배
+    # [3연타 분할 전송] 초안 등록 -> 한글 제목 먼저 박제 -> 마지막에 예약 발행(publish) 전송
     try:
-        print(f"🔗 [1연타] 영어 퍼머링크 굳히기 발행 중... (Target URL: /{slug}.html)")
+        print(f"🔗 [1연타] 영어 퍼머링크 굳히기 초안 등록 중... (Target URL: /{slug}.html)")
         res_insert = blogger.posts().insert(
             blogId=BLOG_ID, 
             body={'title': slug, 'content': final_html, 'labels': tags}, 
-            isDraft=False
+            isDraft=True
         ).execute()
         
         created_post_id = res_insert.get('id')
@@ -414,12 +414,10 @@ def main():
         time.sleep(1.0)
 
         print(f"⏰ [3연타] 예약 대기열({scheduled_pub_time})로 최종 유배 전송 중...")
-        blogger.posts().patch(
-            blogId=BLOG_ID, 
-            postId=created_post_id, 
-            body={
-                'published': scheduled_pub_time
-            }
+        blogger.posts().publish(
+            blogId=BLOG_ID,
+            postId=created_post_id,
+            publishDate=scheduled_pub_time
         ).execute()
 
         print(f"✅ <카라이프> 포스팅 규격화 완벽 발행 성공! ({title})")
