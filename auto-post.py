@@ -45,9 +45,9 @@ from google.genai import types
 # =====================================================================
 # ⚙️ 고유 설정 정보 【★ 아래 3개는 형이 직접 채워야 함 ★】
 # =====================================================================
-BLOG_ID = "여기에_새_자동차블로그_ID"            # ★ 블로거 관리페이지 URL의 숫자
-CAR_TEST_URL = "여기에_자동차테스트_게시글_URL"   # ★ car-match-embed 글 발행 후 주소
-GOOGLE_ADSENSE_SLOT = "여기에_새_광고슬롯"        # ★ 애드센스 새 슬롯 번호
+BLOG_ID = "8172138309834961611"
+CAR_TEST_URL = "https://car.gwangchoon.com/2026/07/car-test.html"
+GOOGLE_ADSENSE_SLOT = "5317754949"
 
 GOOGLE_ADSENSE_CLIENT = "ca-pub-4292478378917157"
 
